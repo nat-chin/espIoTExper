@@ -1,0 +1,62 @@
+#include <Arduino.h>
+#include <WiFi.h> 
+// To open WiFI gateway + to open webserver
+#include <ESPmDNS.h>
+// For Local domain name + service advertisement
+
+#define LEDPIN1 32
+#define LEDPIN2 33
+// Orange wire = 32
+// Blue wire = 33
+
+const char* ssid     = "ton kong 2.4G";
+const char* password = "022872225";
+
+WiFiServer httpserver(80);
+
+String header = ""; // to Store http request header
+
+// initialize state varaible of output as off
+String state32 = "off";
+String state33 = "off";
+
+#define hostname "ESPwebserv"
+const char *host = hostname;
+
+void setup(){
+  Serial.begin(115200);
+  pinMode(LEDPIN1,OUTPUT);
+  pinMode(LEDPIN2,OUTPUT);
+
+  // Check wifi connection
+  Serial.print("Connecting to ");
+  Serial.print(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid,password);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+  }
+  Serial.println("");
+  Serial.println("Succesfully Connected to "); Serial.print(WiFi.getHostname());
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP()); // Printout ipv4 (Assigned by router)
+  
+  // Begin hosting as wifiserver
+  httpserver.begin();
+
+  // set mDNS name
+  if(MDNS.begin(hostname)){
+    Serial.println("MDNS responder started");
+  }
+  // set Service advertisement as http server (in case of multiple client)
+  MDNS.addService("http", "tcp", 80);
+  Serial.printf("HTTPServer ready! Open at http://%s.local in your browser \n", host);
+
+}
+
+void loop(){
+
+  // Polling for client connection
+
+
+}

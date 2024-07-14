@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stepper Motor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="stepperStyle.css">
+</head>
+<body>
+  <h1>Stepper Motor Control</h1>
+    <form action="/" method="POST">
+      <!-- Form submit and reload back to Root URL (Request root page from server) -->
+      <input type="radio" name="direction" value="CW" checked>
+      <label for="CW">Clockwise</label>
+      <input type="radio" name="direction" value="CCW">
+      <label for="CW">Counterclockwise</label><br><br><br>
+      <label for="steps">Number of steps:</label>
+      <input type="number" name="steps">
+      
+      <input type="submit" value="GO!">
+    </form>
+</body>
+</html>

@@ -1,10 +1,11 @@
 #include <Arduino.h>
-// File system uploader plugin that is compatible with AVR ,ESP ,RP2040 , let you accees Flash memory easier
-#include "LittleFS.h"
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
+
+// File system uploader plugin that is compatible with AVR ,ESP ,RP2040 , let you accees Flash memory easier
+#include "LittleFS.h"
 
 // Stepper library to interface with various stepper motor driver chips
 // The Driver board I am using is ULN2003AN , Stepper motor 28BYJ-48
@@ -38,8 +39,7 @@ String steps;
 // a flag to detect whether a new client request occurred
 bool newRequest = false;
 
-const char* host = "espmotor";
-
+// Store HTML variable in flash memory (Raw String literal) 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -50,17 +50,20 @@ const char index_html[] PROGMEM = R"rawliteral(
 <body>
   <h1>Stepper Motor Control</h1>
     <form action="/" method="POST">
+      <!-- Form submit and reload back to Root URL (Request root page from server) -->
       <input type="radio" name="direction" value="CW" checked>
       <label for="CW">Clockwise</label>
       <input type="radio" name="direction" value="CCW">
       <label for="CW">Counterclockwise</label><br><br><br>
       <label for="steps">Number of steps:</label>
       <input type="number" name="steps">
+      
       <input type="submit" value="GO!">
     </form>
 </body>
 </html>
 )rawliteral";
+
 // The Client doesn't incorporate AJAX for Async client response
 
 // Initialize LittleFS
@@ -94,22 +97,17 @@ void setup() {
   myStepper.setSpeed(50); // step per sec
 
   /*Set URL Route handler */
-
   // Handle Root "/"  GET request. (Initial request for webpage)
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(LittleFS, "/stepperform.html", "text/html");
-    // request->send(200, "text/html", index_html);
-    // use another overload of send() that will read from file system before Sending Response Code 200 OK
+    request->send(200, "text/html", index_html);
   });
-
-  server.serveStatic("/", LittleFS, "/");
   
   // Handle Root "/" POST request (HTML form)
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
     int params = request->params();
     // Stores HTTP parameters length
 
-    // Loop for all parameter,
+    // Loop for all parameter ,
     for(int i=0;i<params;i++){
       // get HTTP request parameter , check if it's POST request (Form) , then check the parameter name if it has direction & steps
       // Response back with HTTP 200 ok HTML , then set newrequest flag to true
@@ -130,14 +128,14 @@ void setup() {
         }
       }
     }
-    request->send(LittleFS, "/stepperform.html", "text/html");
-    // request->send(200, "text/html", index_html);
+    request->send(200, "text/html", index_html);
     newRequest = true;
   });
 
   // mdns name for local device
-  
-  if (MDNS.begin("espmotor")) {
+  const char *host = "ESPMotor";
+  MDNS.begin(host);
+  if (MDNS.begin(host)) {
     Serial.println("mDNS responder started");
   }
 
@@ -145,7 +143,7 @@ void setup() {
   
   // Service Advertisement to LAN ( In case of multiple client)
   MDNS.addService("http", "tcp", 80);
-  Serial.printf("HTTPAsyncServer ready! Open http://%s.local in your browser\n", host);
+  Serial.printf("HTTPUpdateServer ready! Open http://%s.local/update in your browser\n", host);
 }
 
 void loop() {

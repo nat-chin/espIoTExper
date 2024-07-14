@@ -1,169 +1,149 @@
 #include <Arduino.h>
-#include <WiFi.h> 
-// To open WiFI gateway + to open webserver
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
-// For Local domain name + service advertisement
-#define LED32 32
-#define LED33 33
-// Orange wire = 32
-// Blue wire = 33
+#include <Stepper.h>
+// stepper library to interface with various stepper motor driver
+// The Driver I am using is ULN2003AN chip
+//  Stepper motor 28BYJ-48
 
+// Stepper Motor Settings 2048
+const int stepsPerRevolution = 1000;  // change this to fit the number of steps per revolution
+// How much is one step ,
+#define IN1 19
+#define IN2 18
+#define IN3 5
+#define IN4 17
+Stepper myStepper(stepsPerRevolution, IN1, IN3, IN2, IN4);
+
+// Replace with your network credentials
 const char* ssid     = "ton kong 2.4G";
 const char* password = "022872225";
 
-WiFiServer httpserver(80);
+// Create Async webserver on TCP port 80
+AsyncWebServer server(80);
 
-String header = ""; // to Store http request header
+// HTTP Search for parameters in HTTP POST request
+const char* PARAM_INPUT_1 = "direction";
+const char* PARAM_INPUT_2 = "steps";
 
-// initialize state varaible of output as off
-String state32 = "off";
-String state33 = "off";
+// Variables to save values from HTML form
+String direction;
+String steps;
 
-#define hostname "ESPwebserv"
-const char *host = hostname;
+// a flag to detect whether a new client request occurred
+bool newRequest = false;
 
-// Set the timing variable
-unsigned long currentTime = 0;
-unsigned long previousTime = 0; 
-// Define timeout = 2000ms = 2s
-const long timeoutTime = 2000;
+// Store HTML variable in flash memory (Raw String literal) 
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stepper Motor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>Stepper Motor Control</h1>
+    <form action="/" method="POST">
+      <!-- Form submit and reload back to Root URL (Request root page from server) -->
+      <input type="radio" name="direction" value="CW" checked>
+      <label for="CW">Clockwise</label>
+      <input type="radio" name="direction" value="CCW">
+      <label for="CW">Counterclockwise</label><br><br><br>
+      <label for="steps">Number of steps:</label>
+      <input type="number" name="steps">
+      
+      <input type="submit" value="GO!">
+    </form>
+</body>
+</html>
+)rawliteral";
 
-void setup(){
-  Serial.begin(115200); pinMode(LED32,OUTPUT); pinMode(LED33,OUTPUT);
+// The Client doesn't incorporate AJAX for Async client response
 
-  // Check wifi connection
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
-  WiFi.mode(WIFI_STA); WiFi.begin(ssid,password);
+// function to Initialize WiFi
+void initWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi ..");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print('.');
-    delay(500);
+    delay(1000);
   }
-  Serial.println("");
-  Serial.println("Succesfully Connected to "); Serial.print(WiFi.getHostname());
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP()); // Printout ipv4 (Assigned by router)
-  
-  // Begin hosting as wifiserver
-  httpserver.begin();
-
-  // set mDNS name
-  if(MDNS.begin(hostname)){
-    Serial.println("MDNS responder started");
-  }
-  // set Service advertisement as http server (in case of multiple client)
-  MDNS.addService("http", "tcp", 80);
-  Serial.printf("HTTPServer ready! Open at http://%s.local in your browser \n", host);
+  Serial.println(WiFi.localIP());
 }
 
-void loop(){
-  // provide method for server side to handle client manually
-  WiFiClient client = httpserver.available(); // Listening for Client Connection
 
-  if(client){
-    currentTime = millis(); // Start the time stamp
-    previousTime = currentTime;
-    Serial.println("New Client.");
+void setup() {
+  Serial.begin(115200);
 
-    String currentLine = "";   // currentline to store the HTTP Req. Body       
-    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
-      currentTime = millis(); // 
-      if(client.available()){
-        char c = client.read();    // read a byte, of character
-        Serial.write(c);          // print it out the serial monitor
-        header += c;             // Store the entire request in header
+  initWiFi();
 
-        /* HTTP req. always end with two newline \n 
-          1st time encounter \n -> Reset currentline http req. body to read new line
-          if \n is detected again in next MCU runtime -> Send http response
-          else if \r is undetected instead meaning there're more HTTP req. body -> Add to currentline again
-        */
+  myStepper.setSpeed(5);
 
-        if (c == '\n') {                
-          
-          // Satisfying the below condition = two newline has been read
-          if (currentLine.length() == 0) {
-            // Send HTTP Response from server :
+  /*Set URL Route handler */
+  // Handle Root "/"  GET request. (Initial request for webpage)
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/html", index_html);
+  });
+  
+  // Handle Root "/" POST request (HTML form)
+  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
+    int params = request->params();
+    // Stores HTTP parameters length
 
-            client.println("HTTP/1.1 200 OK"); // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK) 
-            client.println("Content-type:text/html"); // and a content-type so the client knows what's coming, 
-            client.println("Connection: close"); // server intruct client to terminate TCP port connection
-            client.println(); // then a blank line:
-            
-            // turns the GPIOs on and off , using .indexOf() to check for specific substring
-            if (header.indexOf("GET /32/on") >= 0) {
-              Serial.println("GPIO 32 on");
-              state32 = "on";
-              digitalWrite(LED32, HIGH);
-            } else if (header.indexOf("GET /32/off") >= 0) {
-              Serial.println("GPIO 32 off");
-              state32 = "off";
-              digitalWrite(LED32, LOW);
-            } else if (header.indexOf("GET /33/on") >= 0) {
-              Serial.println("GPIO 33 on");
-              state33 = "on";
-              digitalWrite(LED33, HIGH);
-            } else if (header.indexOf("GET /33/off") >= 0) {
-              Serial.println("GPIO 32 off");
-              state33 = "off";
-              digitalWrite(LED33, LOW);
-            }
-            /* Display HTML Webpage (Manually handle is this hedache)*/
-            
-            // HTML DOM <head>
-            client.println("<!DOCTYPE html><html>");
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<link rel=\"icon\" href=\"data:,\">");
+    // Loop for all parameter ,
+    for(int i=0;i<params;i++){
+      // get HTTP request parameter , check if it's POST request (Form) , then check the parameter name if it has direction & steps
+      // Response back with HTTP 200 ok HTML , then set newrequest flag to true
+      AsyncWebParameter* p = request->getParam(i);
+      if(p->isPost()){
 
-            // CSS styling on ON/OFF buttons 
-            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 16px 40px;");
-            client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-            client.println(".button2 {background-color: #555555;}</style></head>");
-            
-            // HTML DOM <Body>
-            client.println("<body><h1>ESP32 Web Server</h1>");
-            
-            // Display current state, and ON/OFF buttons for GPIO 32  
-            client.println("<p>GPIO 32 - State " + state32 + "</p>");
-            // If the output26State is off, it displays the ON button       
-            if (state32=="off") {
-              client.println("<p><a href=\"/32/on\"><button class=\"button\">ON</button></a></p>");
-            } else {
-              client.println("<p><a href=\"/32/off\"><button class=\"button button2\">OFF</button></a></p>");
-            } 
-               
-            // Display current state, and ON/OFF buttons for GPIO 27  
-            client.println("<p>GPIO 33 - State " + state33 + "</p>");
-            // If the output27State is off, it displays the ON button       
-            if (state33=="off") {
-              client.println("<p><a href=\"/33/on\"><button class=\"button\">ON</button></a></p>");
-            } else {
-              client.println("<p><a href=\"/33/off\"><button class=\"button button2\">OFF</button></a></p>");
-            }
-            client.println("</body></html>");
-            
-            // The HTTP response ends with another blank line
-            client.println();
-            // Break out of the while loop
-            break;
-          } else {
-            currentLine = "";
-          }
-        // if the currentline is has not detected carriage return yet (indication that the next character is \n)
-        } else if (c != '\r'){
-          currentLine += c;
-          // append byte read from client to currentline
-        }    
+        // Check if HTTP POST input1 value is "direction" , save the value in ESP32 variable
+        if (p->name() == PARAM_INPUT_1) {
+          direction = p->value().c_str();
+          Serial.print("Direction set to: ");
+          Serial.println(direction);
+        }
+        // Check if HTTP POST input2 value is "steps" , save the value in ESP32 variable
+        if (p->name() == PARAM_INPUT_2) {
+          steps = p->value().c_str();
+          Serial.print("Number of steps set to: ");
+          Serial.println(steps);
+        }
       }
-
     }
-    // After the connection between client and Server has stopped (failure or Response is done)
-    // Clear the header variable
-    header = "";
-    // Close the connection
-    client.stop();
-    Serial.println("Client disconnected."); Serial.println("");
+    request->send(200, "text/html", index_html);
+    newRequest = true;
+  });
 
+  // mdns name for local device
+  char *host = "ESPMotor";
+  MDNS.begin(host);
+  if (MDNS.begin(host)) {
+    Serial.println("mDNS responder started");
+  }
+
+  server.begin();
+  
+  // Service Advertisement to LAN ( In case of multiple client)
+  MDNS.addService("http", "tcp", 80);
+  Serial.printf("HTTPUpdateServer ready! Open http://%s.local/update in your browser\n", host);
+}
+
+void loop() {
+  /* Asyncwebserver does not require to handle client in the loop , but the code is for driving stepper motor */
+  // Check if there was a new request and move the stepper accordingly
+  if (newRequest){
+    if (direction == "CW"){
+      // Spin the stepper clockwise direction
+      myStepper.step(steps.toInt());
+    }
+    else{
+      // Spin the stepper counterclockwise direction
+      myStepper.step(-steps.toInt());
+    }
+    newRequest = false; // reset flag
   }
 }

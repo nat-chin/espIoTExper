@@ -91,6 +91,7 @@ void loop(){
             client.println("Connection: close"); // server intruct client to terminate TCP port connection
             client.println(); // then a blank line:
             
+            // Manually set URL Route Handler
             // turns the GPIOs on and off , using .indexOf() to check for specific substring
             if (header.indexOf("GET /32/on") >= 0) {
               Serial.println("GPIO 32 on");
@@ -142,11 +143,11 @@ void loop(){
             } else {
               client.println("<p><a href=\"/33/off\"><button class=\"button button2\">OFF</button></a></p>");
             }
-            client.println("</body></html>");
+            client.println("</body></html>"); // print and end with newline
             
-            // The HTTP response ends with another blank line
+            // Mark The HTTP response ends with another newline
             client.println();
-            // Break out of the while loop
+            // Break out of the while loop (breakout of client connection)
             break;
           } else {
             currentLine = "";

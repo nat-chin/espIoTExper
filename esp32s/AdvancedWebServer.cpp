@@ -36,8 +36,8 @@
 #include "soc/soc.h"
 #include "soc/rtc.h"
 
-const char *ssid = "YourSSIDHere";
-const char *password = "YourPSKHere";
+const char* ssid     = "ton kong 2.4G";
+const char* password = "022872225";
 
 WebServer server(80);
 

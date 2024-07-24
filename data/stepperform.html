@@ -4,19 +4,24 @@
   <title>Stepper Motor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" type="text/css" href="stepperStyle.css">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
 </head>
 <body>
-  <h1>Stepper Motor Control</h1>
+  <div class="topnav">
+    <h1>Stepper Motor Control <i class="fas fa-cogs"></i></h1>
+  </div>
+  <div class="content">
     <form action="/" method="POST">
-      <!-- Form submit and reload back to Root URL (Request root page from server) -->
       <input type="radio" name="direction" value="CW" checked>
       <label for="CW">Clockwise</label>
       <input type="radio" name="direction" value="CCW">
+      <!-- input name will be sent in POST request body as variable name , value as its value -->
       <label for="CW">Counterclockwise</label><br><br><br>
       <label for="steps">Number of steps:</label>
       <input type="number" name="steps">
-      
       <input type="submit" value="GO!">
     </form>
+  </div>
 </body>
 </html>

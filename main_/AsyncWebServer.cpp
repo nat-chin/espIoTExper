@@ -60,7 +60,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 
-// Function that return a string text of output state , after the HTTP request is sent 
+// Function that return a string text of output state of LED , read locally to sync the checkbox in webpage 
 String outputState(int output){
   if(digitalRead(output)){
     return "checked";
@@ -70,9 +70,11 @@ String outputState(int output){
   }
 }
 
-// The function will be run to replaces placeholder with button section in your web page , when an event occured
+// The callback function to be called when any type of GET req. to Root URL occurred, 
+// Before server response with HTML DOC, pass that DOC through this callback, and when it found %BUTTONPLACEHOLDER% ,do the following  
 String processor(const String& var){
-  //Serial.println(var);
+  
+  // Replaces placeholder with CSS styled button section 
   if(var == "BUTTONPLACEHOLDER"){
     String buttons = "";
     buttons += "<h4>Output - GPIO 2</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"2\" " + outputState(LED_BUILTIN) + "><span class=\"slider\"></span></label>";
@@ -154,4 +156,7 @@ void setup(){
 void loop() {
  // no need for Async server to handle client request in loop , it will handle Non-Block request
  // It won't need to wait for the process to be done
+
+ // How can the state be saved
+ // So by process
 }

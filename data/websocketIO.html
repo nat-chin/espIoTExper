@@ -16,21 +16,42 @@
     <div class="card">
       <h2>Output - GPIO 2</h2>
       <p class="state">state: <span id="state">%STATE%</span></p>
+      <!-- in span container make placeholder %STATE% for the request handler to replace -->
       <p><button id="button" class="button">Toggle</button></p>
+      <!-- button of id button -->
+
     </div>
   </div>
-  <!-- Javascript websocket -->
+<!-- Javascript Websocket Client -->
 <script>
-  var gateway = `ws://${window.location.hostname}/ws`;
+  /* Server will initially send JS code to client via handshake and Client will do the following */
+
+  // establish WS gateway URL , window indicates the current page
+  var gateway = `ws://${window.location.hostname}/ws`; 
   var websocket;
+  
+  
+  // when onload event occurs (initial page is loaded from WS server) we will do 2 things
+  // initwebsocket -> will init websocket client object
+  // initbutton -> will add onclick listener to HTML button
   window.addEventListener('load', onLoad);
+  
+  function onLoad(event) {
+    initWebSocket();
+    initButton();
+  }
+
   function initWebSocket() {
     console.log('Trying to open a WebSocket connection...');
     websocket = new WebSocket(gateway);
+    // make a websocket class containing WS URL => How is it different than HTTP URL , let's see
+
+    // pass custom function in each of websocket event that can occurs , open , close , message , those will trigger our function
     websocket.onopen    = onOpen;
     websocket.onclose   = onClose;
     websocket.onmessage = onMessage; // <-- add this line
   }
+
   function onOpen(event) {
     console.log('Connection opened');
   }
@@ -38,6 +59,7 @@
     console.log('Connection closed');
     setTimeout(initWebSocket, 2000);
   }
+  // when WS on message event occurs (WS server has notify all client with LED state , we take that from event stream)
   function onMessage(event) {
     var state;
     if (event.data == "1"){
@@ -46,18 +68,19 @@
     else{
       state = "OFF";
     }
-    document.getElementById('state').innerHTML = state;
+    // dynamically change span of state ID as ON or OFF , according to the above condition
+    document.getElementById('state').innerHTML= state;
   }
-  function onLoad(event) {
-    initWebSocket();
-    initButton();
-  }
+
+  // when called , it will add onclick listener to our HTML button of id= "button" with toggle function
   function initButton() {
     document.getElementById('button').addEventListener('click', toggle);
   }
+  // toggle will just use our initialized websocket object to send the word "toggle" back to WS server by our defined gateway
   function toggle(){
     websocket.send('toggle');
   }
+
 </script>
 </body>
 </html>

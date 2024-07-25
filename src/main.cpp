@@ -2,7 +2,13 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncWebSocket.h>
+#include <LittleFS.h>
 // inside there's Asyncwebsocket server side library
+
+// Brownout issue
+#include "soc/soc.h"
+#include "soc/rtc.h"
 
 // Replace with your network credentials
 const char* ssid     = "ton kong 2.4G";
@@ -11,10 +17,13 @@ const char* password = "022872225";
 bool ledState = 0;
 const int ledPin = 2; // ledbuiltin
 
-// Create AsyncWebServer object on port 80
+// create AsyncWebServer object connecting to ASync TCP port 80
 AsyncWebServer server(80);
+// create Websocketserver object specified WS url that should match with that of  JS client side
 AsyncWebSocket ws("/ws");
+// So instead of making our server run on HTTP , we will use WS protocol not on top, but replace it
 
+// Store variable inside flashmemory with SPI flash fil system
 // Store the variable inside flashmemory with PROGMEM
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -22,10 +31,9 @@ const char index_html[] PROGMEM = R"rawliteral(
   <title>ESP Web Server</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
-  
-<title>ESP Web Server</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
+  <title>ESP Web Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="topnav">
@@ -81,22 +89,30 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// Two way handshake?
+// ws.textAll is a function to bidirectionally send WS message to all connected client
+// Message format is in Frame
 void notifyClients() {
   ws.textAll(String(ledState));
 }
 
+// WS message handler, will handle WS data frame from Client Side
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
+  // compress all the websocket message (not inside HTTP body anymore) into AWSframe object
+
+  // Checking all sorts of attribute in AWSframe
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
+
+    // Toggle LED state as opposite and call notifyclient 
     if (strcmp((char*)data, "toggle") == 0) {
-      ledState = !ledState; // Flip the state of LED , and save it in variable to sync with webpage reload
+      ledState = !ledState;
       notifyClients();
     }
   }
 }
 
+// onEvent function , handles all event that the client can trigger with its own websocket object
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len) {
   switch (type) {
@@ -115,15 +131,13 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   }
 }
 
-// initialize WS
+// init websocket on server side
 void initWebSocket() {
   ws.onEvent(onEvent);
   server.addHandler(&ws);
 }
 
-
-// Callback function to apply when server is about to response back with HTML DOC , if the DOC string passed to this function
-// detects %STATE% placeholder , it will replaces with either ON or OFF , depending on ledstate flag
+// function to replace the html place holder before sending the response
 String processor(const String& var){
   Serial.println(var);
   if(var == "STATE"){
@@ -138,6 +152,7 @@ String processor(const String& var){
 }
 
 void setup(){
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   // Serial port for debugging purposes
   Serial.begin(115200);
 
@@ -151,23 +166,35 @@ void setup(){
     Serial.println("Connecting to WiFi..");
   }
 
+  if (!LittleFS.begin(true)) {
+    Serial.println("An error has occurred while mounting LittleFS");
+  }
+  else {
+  Serial.println("LittleFS mounted successfully");
+  }
+
   // Print ESP Local IP Address
   Serial.println(WiFi.localIP());
 
+  //  init websocket server
   initWebSocket();
 
-  // Route handler for root / web page -> Browser req. for initial webpage
+  // For WS handshake response, HTTP request Handler for root URL /
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
-    // send response , and run a callback function that will
+    // request->send(LittleFS, "/websocketIO.html", "text/html",processor);
   });
+  // note that HTTP req. from WS client is different than regular -> learn more https://www.jittagornp.me/blog/what-is-websocket/
 
-  // Start Async server
+  // Start asycn WS server
   server.begin();
 }
 
 void loop() {
-  ws.cleanupClients(); // Why websocket needs to cleanup Clients? , what is that of Client needs to be clean
+
+  // in every runtime loop of esp32 , clean up disconnected client (is that meaning closing the socket , or it having single socket)
+  // continously change LED state (state variable will be changed in processor)
+
+  ws.cleanupClients();
   digitalWrite(ledPin, ledState);
-  // can I put this on the server on request lambdat function , why is this in a loop?
 }

@@ -1,11 +1,6 @@
-
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
+#include <WiFi.h>  
 #include <PubSubClient.h>
-#include <DHT.h>
-// DHT sensor library
-// DHT11 has its own MCU to do the ADC and sending some value for us to decode using this libs
-
+#include <WiFiClientSecure.h>
 // Brownout issue
 #include "soc/soc.h"
 #include "soc/rtc.h"
@@ -27,14 +22,15 @@ const char* mqtt_password = "Esp32_1234"; // replace with your Password
 // const char* mqtt_username = "NodeRed"; // replace with your Username
 // const char* mqtt_password = "NodeRed1234"; // replace with your Password
 
-WiFiClientSecure espClient;
+WiFiClientSecure espClient;  
 PubSubClient client(espClient);
-long lastMsg = 0;
-char msg[50];
+unsigned long lastMsg = 0;
+#define MSG_BUFFER_SIZE (500)
+char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
 // HiveMQ Cloud Let's Encrypt CA certificate (hardcoded)
-// this is root certificate for HiveMQ cloud
+// this is root certificate for HiveMQ cloud , 
 static const char *root_ca PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
@@ -69,89 +65,33 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----
 )EOF";
 
-/* DHT set up*/
-#define ledPin 2
-#define dhtpin 23
-DHT dht(dhtpin,DHT11); // (pin , type)
-float temperature = 0;
-float humidity = 0;
 
-void callback(char* topic, byte* message, unsigned int length);
-
-void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(115200);
-  dht.begin();
-
-  delay(50);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.mode(WIFI_STA); // set as station (default)
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  } Serial.println();
-  Serial.println("WiFi connected");
-  Serial.println("IP address: "); Serial.print(WiFi.localIP());
-
-  espClient.setCACert(root_ca);
-  client.setServer(mqtt_server, mqtt_port); // default tcp port for MQTT COM is 1883
-  // client.setServer(mqtt_server, 8883); // default tcp port for MQTT COM is 1883
-  client.setCallback(callback);
-
-  pinMode(ledPin, OUTPUT);
-}
-
-// callback handler to handle MQTTbroker sending a published message of particular topic (NodeRed is the publisher)
-// [in this case we will handle only esp32/output topics , client device should also subscribe to ]
-void callback(char* topic, byte* message, unsigned int length) {
-  Serial.print("Message arrived on topic: ");
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
   Serial.print(topic);
-  Serial.print(". Message: ");
-  String messageTemp;
-  
-  // Decode
+  Serial.print("] ");
   for (int i = 0; i < length; i++) {
-    Serial.print((char)message[i]);
-    messageTemp += (char)message[i];
+    Serial.print((char)payload[i]);
   }
   Serial.println();
-
-  /* Feel free to add more if statements to control more GPIOs with MQTT*/
-
-  // If a message is received on the topic esp32/output, check if the message is "on" or "off". change ledstate
-
-  if (String(topic) == "esp32/output") {
-    Serial.print("Changing output to ");
-    if(messageTemp == "on"){
-      Serial.println("on");
-      digitalWrite(ledPin, HIGH);
-    }
-    else if(messageTemp == "off"){
-      Serial.println("off");
-      digitalWrite(ledPin, LOW);
-    }
-  }
 }
+
 
 void reconnect() {
-  // Loop until we're reconnected
+  // Loop until we’re reconnected
   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    
-    // MakeUp some Random Client ID
+    Serial.print("Attempting MQTT connection… ");
+    // MQTT client ID
     String clientId = "ESP32Client";
     // Attempt to connect
     if (client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
-      Serial.println("connected");
-      // Subscribe to topics esp32/output (to communicate with NodeRed)
-      client.subscribe("esp32/output");
+      Serial.println("connected!");
+      // Once connected, publish an announcement…
+      client.publish("testTopic", "Hello World!");
+      // … and resubscribe
+      client.subscribe("testTopic");
     } else {
-      Serial.print("failed, rc=");
+      Serial.print("failed, rc = ");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
@@ -159,37 +99,50 @@ void reconnect() {
     }
   }
 }
+
+void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  Serial.begin(115200);
+  delay(50);
+
+  // We start by connecting to a WiFi network
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  randomSeed(micros()); // why>
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  espClient.setCACert(root_ca); // set CA certificate of server side for this HTTP client to make HTTPS connection 
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+}
+
 void loop() {
-  // Connection error handling
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
-
-  long now = millis();
+  
+	// increment value & Publish every 2 sec.
+  unsigned long now = millis();
   if (now - lastMsg > 2000) {
     lastMsg = now;
-    
-    // Temperature in Celsius
-    temperature = dht.readTemperature();
-    // Percentage of Relative humidity (relative of water)
-    humidity = dht.readHumidity();
-    Serial.print("Not Encoded: ");
-    Serial.println(temperature);
-    Serial.println(humidity);
-
-    
-    /* Convert the value to a char array (maximum 8 char with 2 floating precision)*/
-    char tempString[8];
-    dtostrf(temperature, 1, 2, tempString);
-    Serial.print("Temperature: ");
-    Serial.println(tempString);
-    client.publish("esp32/temperature", tempString);
-    
-    char humiString[8];
-    dtostrf(humidity, 1, 2, humiString);
-    Serial.print("Humidity: ");
-    Serial.println(humiString);
-    client.publish("esp32/humidity", humiString);
+    value++;
+    snprintf (msg, MSG_BUFFER_SIZE, "Hello World! #%ld", value);
+    Serial.print("Publish message: ");
+    Serial.println(msg);
+    client.publish("testTopic", msg);
   }
 }

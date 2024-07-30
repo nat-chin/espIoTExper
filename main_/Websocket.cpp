@@ -95,7 +95,7 @@ void notifyClients() {
   ws.textAll(String(ledState));
 }
 
-// WS message handler, will handle WS data frame from Client Side
+// WS message handler, will handle WS data frame from Client Side and parse
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   // compress all the websocket message (not inside HTTP body anymore) into AWSframe object
@@ -181,8 +181,8 @@ void setup(){
 
   // For WS handshake response, HTTP request Handler for root URL /
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-    // request->send(LittleFS, "/websocketIO.html", "text/html",processor);
+    // request->send_P(200, "text/html", index_html, processor);
+    request->send(LittleFS, "/websocketIO.html", "text/html",processor);
   });
   // note that HTTP req. from WS client is different than regular -> learn more https://www.jittagornp.me/blog/what-is-websocket/
 
